@@ -1,0 +1,89 @@
+version: "3.9"
+
+# ---------------------------------------------------------------------------
+# Kompyla — docker-compose deployment
+#
+# Profiles:
+#   (default)         kompyla-ui only  — connect to Ollama on the host or
+#                                         supply ANTHROPIC_API_KEY
+#   --profile ollama  also starts a bundled Ollama container
+# ---------------------------------------------------------------------------
+
+services:
+
+  # ── Streamlit web UI ───────────────────────────────────────────────────────
+  kompyla-ui:
+    image: kompyla:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${KOMPYLA_PORT:-8501}:8501"
+    volumes:
+      # Mount your local KB directory (or an empty dir to create a new one)
+      - "${KOMPYLA_KB_PATH:-./my_kb}:/kb"
+    environment:
+      KOMPYLA_KB: /kb
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      TAVILY_API_KEY: "${TAVILY_API_KEY:-}"
+      GITHUB_TOKEN: "${GITHUB_TOKEN:-}"
+      # When using the bundled Ollama service, override the URL:
+      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://ollama:11434}"
+    depends_on:
+      ollama:
+        condition: service_healthy
+        required: false   # only enforced when --profile ollama is used
+    restart: unless-stopped
+
+  # ── Kompyla CLI (one-shot commands via `docker compose run cli <cmd>`) ──────
+  cli:
+    image: kompyla:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["kompyla"]
+    volumes:
+      - "${KOMPYLA_KB_PATH:-./my_kb}:/kb"
+    environment:
+      KOMPYLA_KB: /kb
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      TAVILY_API_KEY: "${TAVILY_API_KEY:-}"
+      GITHUB_TOKEN: "${GITHUB_TOKEN:-}"
+      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://ollama:11434}"
+    profiles: ["cli"]   # not started by default; run explicitly
+
+  # ── Scheduled research cycle (optional long-running worker) ─────────────────
+  scheduler:
+    image: kompyla:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    entrypoint: ["kompyla", "schedule", "--daemon"]
+    volumes:
+      - "${KOMPYLA_KB_PATH:-./my_kb}:/kb"
+    environment:
+      KOMPYLA_KB: /kb
+      ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
+      TAVILY_API_KEY: "${TAVILY_API_KEY:-}"
+      GITHUB_TOKEN: "${GITHUB_TOKEN:-}"
+      OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://ollama:11434}"
+    profiles: ["scheduler"]
+    restart: unless-stopped
+
+  # ── Bundled Ollama (offline LLM) ─────────────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    volumes:
+      - ollama_models:/root/.ollama
+    ports:
+      - "11434:11434"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    profiles: ["ollama"]
+    restart: unless-stopped
+
+volumes:
+  ollama_models:

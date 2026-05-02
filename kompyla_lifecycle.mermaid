@@ -1,0 +1,95 @@
+flowchart TD
+    %% ============ 1. INITIALISATION ============
+    subgraph INIT["1 — Initialisation"]
+        U1[/User: research domain/]
+        I1[kompyla init]
+        I2[LLM: generate schema]
+        I3[(Domain Schema)]
+        I4[(KB directory structure)]
+        U1 --> I1 --> I2 --> I3
+        I2 --> I4
+    end
+
+    %% ============ 2. RETRIEVAL ============
+    subgraph RETR["2 — Retrieval"]
+        R0[Retrieval Orchestrator]
+        R1[Source connectors:<br/>Tavily · arXiv · GitHub<br/>RSS · YouTube]
+        R2[Dedup: SHA-256<br/>+ MinHash]
+        R3[Relevance filter<br/>LLM scoring]
+        R4[(raw/ documents)]
+        R0 --> R1 --> R2 --> R3 --> R4
+    end
+
+    %% ============ 3. COMPILATION ============
+    subgraph COMP["3 — Compilation"]
+        C1[Pending raw docs]
+        C2[LLM Compiler]
+        C3{Wiki page<br/>exists?}
+        C4[Write new page]
+        C5[LLM merge pass]
+        C6[Master Index update]
+        C1 --> C2 --> C3
+        C3 -->|No| C4 --> C6
+        C3 -->|Yes| C5 --> C6
+    end
+
+    %% ============ 4. EVOLUTION ============
+    subgraph EVOL["4 — Evolution"]
+        E0[(Wiki KB)]
+        E1[Lint: links, stale,<br/>orphans, confidence]
+        E2[Gap Detection:<br/>broken-link + LLM gaps]
+        E3[/User Feedback/]
+        E4[Confidence delta]
+        E0 --> E1
+        E0 --> E2
+        E0 --> E3 --> E4 --> E0
+    end
+
+    %% ============ 5. QUERY & PRESENTATION ============
+    subgraph PRES["5 — Query & Presentation"]
+        Q1[/User question/]
+        Q2[Q&A Engine]
+        Q3[LLM answer<br/>with citations]
+        Q4{Save as<br/>synthesis?}
+        Q5[(Synthesis page)]
+        P0[Export: HTML · DOCX<br/>PPTX · Marp · PDF<br/>Markdown · Charts]
+        Q1 --> Q2 --> Q3 --> Q4
+        Q4 -->|Yes| Q5
+    end
+
+    %% ============ 6. AUTOMATION ============
+    subgraph AUTO["6 — Automation"]
+        A1[Scheduler<br/>daemon / cron]
+        A2[Full cycle: retrieve<br/>compile · lint · gaps]
+        A3[Cross-Reference Bridge]
+        A4[(Other domain KB)]
+        A5[(Comparison report)]
+        A1 --> A2
+        A3 --> A4
+        A3 --> A5
+    end
+
+    %% ============ CROSS-LAYER FLOWS (minimal) ============
+    I3 -->|seed queries| R0
+    R4 --> C1
+    C6 --> E0
+    E2 -->|auto-fill| R0
+    E0 --> Q2
+    E0 --> P0
+    Q5 -.-> E0
+    A2 -->|triggers| R0
+
+    %% ============ STYLING ============
+    classDef initLayer fill:#fff4d6,stroke:#b8860b,stroke-width:2px,color:#000
+    classDef retrLayer fill:#d6e8ff,stroke:#1f4e8c,stroke-width:2px,color:#000
+    classDef compLayer fill:#d6f5d6,stroke:#2e7d32,stroke-width:2px,color:#000
+    classDef evolLayer fill:#ffe2c4,stroke:#cc5500,stroke-width:2px,color:#000
+    classDef presLayer fill:#e8d6ff,stroke:#5b2c8c,stroke-width:2px,color:#000
+    classDef autoLayer fill:#e0e0e0,stroke:#555555,stroke-width:2px,color:#000
+
+    class INIT initLayer
+    class RETR retrLayer
+    class COMP compLayer
+    class EVOL evolLayer
+    class PRES presLayer
+    class AUTO autoLayer

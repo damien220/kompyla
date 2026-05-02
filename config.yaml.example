@@ -1,0 +1,22 @@
+# Kompyla global configuration — copy to ~/.kompyla/config.yaml
+
+llm:
+  # "ollama" (offline, default) or "anthropic"
+  provider: ollama
+  model: llama3.2          # any model pulled via `ollama pull <model>`
+  ollama_base_url: http://localhost:11434
+  # provider: anthropic
+  # model: claude-sonnet-4-6
+  # anthropic_api_key is read from ANTHROPIC_API_KEY env var
+
+retrieval:
+  enabled_sources: [web, arxiv, github, rss]   # subset of: web, arxiv, github, rss, youtube
+  max_per_source: 5
+  min_relevance: 0.5
+  use_relevance_filter: true
+  # tavily_api_key: ...                        # or via TAVILY_API_KEY env var
+  # github_token: ...                          # or via GITHUB_TOKEN env var
+  rss_feeds:
+    # - https://hnrss.org/frontpage
+    # - https://feeds.arstechnica.com/arstechnica/index
+  youtube_languages: [en]
