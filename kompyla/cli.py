@@ -55,7 +55,12 @@ def _build_connectors(cfg: RetrievalConfig, only: list[str] | None = None):
 
     requested = only or cfg.enabled_sources
     available: dict[str, object] = {
-        "web":     WebSearchConnector(api_key=cfg.tavily_api_key),
+        "web":     WebSearchConnector(
+                       serper_api_key=cfg.serper_api_key,
+                       brave_api_key=cfg.brave_api_key,
+                       exa_api_key=cfg.exa_api_key,
+                       serpapi_api_key=cfg.serpapi_api_key,
+                   ),
         "arxiv":   ArxivConnector(),
         "github":  GitHubConnector(token=cfg.github_token),
         "rss":     RSSConnector(feeds=cfg.rss_feeds),

@@ -2,9 +2,9 @@
 
 llm:
   # "ollama" (offline, default) or "anthropic"
-  provider: ollama
-  model: llama3.2          # any model pulled via `ollama pull <model>`
-  ollama_base_url: http://localhost:11434
+  # provider: ollama
+  # model: llama3.2          # any model pulled via `ollama pull <model>`
+  # ollama_base_url: http://localhost:11434
   # provider: anthropic
   # model: claude-sonnet-4-6
   # anthropic_api_key is read from ANTHROPIC_API_KEY env var

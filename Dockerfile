@@ -1,29 +1,29 @@
 # ── Build stage ──────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS builder
-
+# python:3.11-slim
 WORKDIR /build
 
-# System deps for trafilatura, lxml, WeasyPrint (optional), and Pillow
+# System deps for trafilatura, lxml, WeasyPrint (optional), and Pillow not:libgdk-pixbuf2.0-0
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc g++ libxml2-dev libxslt1-dev libffi-dev libcairo2 libpango-1.0-0 \
-    libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
+    libpangocairo-1.0-0 libgdk-pixbuf-xlib-2.0-0  \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml .
 COPY kompyla/ kompyla/
 
-# Install with optional pdf support; no dev extras
+# Install with optional pdf + all search backends; no dev extras
 RUN pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir -e ".[pdf]"
+ && pip install --no-cache-dir ".[pdf,search]"
 
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
 FROM python:3.11-slim AS runtime
 
-# Runtime system libs only
+# Runtime system libs only libgdk-pixbuf2.0-0
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libxml2 libxslt1.1 libffi8 libcairo2 libpango-1.0-0 \
-    libpangocairo-1.0-0 libgdk-pixbuf2.0-0 \
+    libpangocairo-1.0-0 libgdk-pixbuf-xlib-2.0-0  \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -48,4 +48,5 @@ ENV KOMPYLA_KB=/kb \
 CMD ["streamlit", "run", "/app/kompyla/ui/app.py", \
      "--server.port=8501", \
      "--server.address=0.0.0.0", \
+     "--server.headless=true", \
      "--browser.gatherUsageStats=false"]

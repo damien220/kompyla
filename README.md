@@ -46,7 +46,7 @@ flowchart TD
     %% ============ 2. RETRIEVAL ============
     subgraph RETR["2 — Retrieval"]
         R0[Retrieval Orchestrator]
-        R1[Source connectors:<br/>Tavily · arXiv · GitHub<br/>RSS · YouTube]
+        R1[Source connectors:<br/>Web · arXiv · GitHub<br/>RSS · YouTube]
         R2[Dedup: SHA-256<br/>+ MinHash]
         R3[Relevance filter<br/>LLM scoring]
         R4[(raw/ documents)]
@@ -137,7 +137,7 @@ flowchart TD
 | Capability                  | Description                                                                                                                      |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | **KB scaffolding**          | LLM generates a domain schema (page types, entity categories, seed queries) from a plain-English topic                           |
-| **Agentic retrieval**       | Searches the web (Tavily), arXiv, GitHub, RSS feeds, and YouTube transcripts automatically                                       |
+| **Agentic retrieval**       | Searches the web (Serper / Brave / Exa / SerpAPI; DuckDuckGo fallback), arXiv, GitHub, RSS feeds, and YouTube transcripts       |
 | **Deduplication**           | SHA-256 exact matching + MinHash LSH for near-duplicate detection (Jaccard ≥ 0.85)                                               |
 | **Incremental compilation** | Raw `.md` files are compiled into structured wiki pages; when a page already exists, a second LLM pass merges new information in |
 | **Health checks**           | Finds broken internal links, stale pages (>180 days), low-confidence pages, and orphans                                          |
@@ -145,7 +145,7 @@ flowchart TD
 | **Q&A**                     | Natural-language questions answered from the wiki with citations; answers can be saved back as synthesis pages                   |
 | **Presentation**            | HTML, Markdown bundle, DOCX, PPTX, Marp slide decks, and PDF (optional) exports                                                  |
 | **Charts**                  | Confidence histogram, pages-by-type, and raw-docs-by-source PNGs                                                                 |
-| **Web UI**                  | Streamlit app with Browse, Search, Ask, and Stats tabs                                                                           |
+| **Web UI**                  | Streamlit app with Browse, Search, Ask, and Stats tabs; guided setup screen on first run                                         |
 | **Scheduler**               | Periodic research cycle (fetch → compile → lint → gaps) with configurable interval                                               |
 | **Cross-referencing**       | Find shared topics between two separate domain KBs                                                                               |
 | **Feedback**                | Flag pages as wrong, outdated, excellent, or unclear; apply to confidence scores                                                 |
@@ -156,15 +156,28 @@ flowchart TD
 ## Requirements
 
 - Python 3.11 or later
-- One of:
-  - **Ollama** (offline, recommended for privacy) — install from [ollama.com](https://ollama.com), then `ollama pull llama3.2`
-  - **Anthropic API key** — set `ANTHROPIC_API_KEY` in your environment
+- One LLM provider — see [LLM providers](#llm-providers) below
 
-Optional (for PDF export):
+Optional extras:
 
 ```bash
-pip install "kompyla[pdf]"   # installs WeasyPrint
+pip install "kompyla[pdf]"          # WeasyPrint for PDF export
+pip install "kompyla[search]"       # Exa and SerpAPI backends
+pip install "kompyla[pdf,search]"   # both
 ```
+
+---
+
+## LLM providers
+
+Kompyla supports four providers. The `provider` key in `config.yaml` selects which one is used.
+
+| Provider      | Config value  | Required env var    | Notes                                                              |
+| ------------- | ------------- | ------------------- | ------------------------------------------------------------------ |
+| **Ollama**    | `ollama`      | —                   | Fully offline. Install from [ollama.com](https://ollama.com), then `ollama pull llama3.2` |
+| **Anthropic** | `anthropic`   | `ANTHROPIC_API_KEY` | Claude models (e.g. `claude-sonnet-4-6`)                           |
+| **OpenAI**    | `openai`      | `OPENAI_API_KEY`    | GPT-4o and other OpenAI models                                     |
+| **Gemini**    | `gemini`      | `GEMINI_API_KEY`    | Gemini 2.0 Flash and other Google models (uses `google-genai` SDK) |
 
 ---
 
@@ -198,10 +211,22 @@ Kompyla ships with a `Dockerfile` and `docker-compose.yml` so you can run the fu
 docker build -t kompyla:latest .
 ```
 
+The image installs `kompyla[pdf,search]` so all LLM providers and all web search backends are available out of the box.
+
+### First run — initialise the KB
+
+On first start the KB directory (`/kb`) is empty. The Streamlit UI detects this automatically and shows a **setup screen** where you type your research domain and click **Initialise KB**. The LLM generates the domain schema and the app reloads into the normal Browse / Search / Ask / Stats view.
+
+If you prefer the CLI:
+
+```bash
+docker compose --profile cli run --rm cli init "electric vehicles" --kb /kb
+```
+
 ### Option A — Streamlit UI only (bring your own LLM)
 
 ```bash
-# With Anthropic (API key in environment)
+# With Anthropic
 ANTHROPIC_API_KEY=sk-... KOMPYLA_KB_PATH=./my_kb docker compose up kompyla-ui
 
 # With a locally running Ollama on the host
@@ -214,10 +239,10 @@ Open `http://localhost:8501` in your browser.
 ### Option B — Full offline stack (Ollama bundled)
 
 ```bash
-# Pull the model on first run (run once, model is cached in a named volume)
+# Pull the model once (cached in a named Docker volume)
 docker compose --profile ollama run --rm ollama ollama pull llama3.2
 
-# Start the UI + Ollama together
+# Start UI + Ollama together
 KOMPYLA_KB_PATH=./my_kb docker compose --profile ollama up
 ```
 
@@ -226,9 +251,6 @@ KOMPYLA_KB_PATH=./my_kb docker compose --profile ollama up
 The `cli` service lets you run any `kompyla` command against the mounted KB:
 
 ```bash
-# Initialise a new KB
-docker compose --profile cli run --rm cli init "electric vehicles" --kb /kb
-
 # Compile documents
 docker compose --profile cli run --rm cli compile --kb /kb
 
@@ -239,21 +261,32 @@ docker compose --profile cli run --rm cli query "What is solid-state battery?" -
 ### Background scheduler (auto-research)
 
 ```bash
-# Runs `kompyla schedule --daemon` — fetches, compiles, lints on the set interval
 KOMPYLA_KB_PATH=./my_kb docker compose --profile scheduler up -d scheduler
 ```
 
 ### Environment variables for Docker
 
-Create a `.env` file in the project root (never commit this file):
+Copy `.env.example` to `.env` in the project root (never commit `.env`):
 
 ```bash
 # .env
-KOMPYLA_KB_PATH=./my_kb     # host path to mount as /kb
-ANTHROPIC_API_KEY=sk-...
-TAVILY_API_KEY=tvly-...
-GITHUB_TOKEN=ghp_...
-KOMPYLA_PORT=8501            # host port for the UI (default 8501)
+KOMPYLA_KB_PATH=./my_kb      # host path mounted as /kb inside the container
+KOMPYLA_PORT=8501             # host port for the UI (default 8501)
+
+# LLM — uncomment the provider you use
+# ANTHROPIC_API_KEY=sk-ant-...
+# OPENAI_API_KEY=sk-...
+# GEMINI_API_KEY=AIza...
+# OLLAMA_BASE_URL=http://host.docker.internal:11434
+
+# Web search — first key present wins; DuckDuckGo used if none are set
+# SERPER_API_KEY=...
+# BRAVE_API_KEY=...
+# EXA_API_KEY=...
+# SERPAPI_API_KEY=...
+
+# Optional
+# GITHUB_TOKEN=ghp_...
 ```
 
 Then simply:
@@ -363,22 +396,28 @@ kompyla synth [--out training.jsonl]   Generate Q&A training data
 
 ## Configuration reference
 
-`~/.kompyla/config.yaml` (or set env vars):
+`~/.kompyla/config.yaml` (env vars override file values):
 
 ```yaml
 llm:
-  provider: ollama # "ollama" or "anthropic"
-  model: llama3.2 # any Ollama model; or "claude-sonnet-4-6" etc.
+  provider: ollama          # "ollama", "anthropic", "openai", or "gemini"
+  model: llama3.2           # any Ollama model; or "claude-sonnet-4-6", "gpt-4o", "gemini-2.0-flash"
   ollama_base_url: http://localhost:11434
-  # anthropic_api_key: sk-...   # or ANTHROPIC_API_KEY env var
+  # anthropic_api_key: ...  # or ANTHROPIC_API_KEY env var
+  # openai_api_key: ...     # or OPENAI_API_KEY env var
+  # gemini_api_key: ...     # or GEMINI_API_KEY env var
 
 retrieval:
-  enabled_sources: [web, arxiv, github, rss] # add "youtube" if needed
+  enabled_sources: [web, arxiv, github, rss]   # add "youtube" if needed
   max_per_source: 5
   min_relevance: 0.5
   use_relevance_filter: true
-  # tavily_api_key: ...          # or TAVILY_API_KEY env var (web search)
-  # github_token: ...            # or GITHUB_TOKEN env var
+  # Web search — first key present wins; DuckDuckGo used as free fallback if none set
+  # serper_api_key: ...     # or SERPER_API_KEY env var
+  # brave_api_key: ...      # or BRAVE_API_KEY env var
+  # exa_api_key: ...        # or EXA_API_KEY env var   (requires kompyla[search])
+  # serpapi_api_key: ...    # or SERPAPI_API_KEY env var (requires kompyla[search])
+  # github_token: ...       # or GITHUB_TOKEN env var
   rss_feeds:
     - https://hnrss.org/frontpage
   youtube_languages: [en]
@@ -386,13 +425,20 @@ retrieval:
 
 ### Environment variables
 
-| Variable            | Purpose                                   |
-| ------------------- | ----------------------------------------- |
-| `ANTHROPIC_API_KEY` | Anthropic API key                         |
-| `OLLAMA_BASE_URL`   | Override Ollama server URL                |
-| `TAVILY_API_KEY`    | Tavily web search API key                 |
-| `GITHUB_TOKEN`      | GitHub API token (increases rate limits)  |
-| `KOMPYLA_KB`        | Default KB path (used by `kompyla serve`) |
+| Variable            | Purpose                                                                       |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY` | Anthropic (Claude) API key                                                    |
+| `OPENAI_API_KEY`    | OpenAI API key                                                                |
+| `GEMINI_API_KEY`    | Google Gemini API key                                                         |
+| `OLLAMA_BASE_URL`   | Override Ollama server URL (default `http://localhost:11434`)                 |
+| `SERPER_API_KEY`    | Serper web search — Google results, $1/1K queries                             |
+| `BRAVE_API_KEY`     | Brave Search API — free tier: 2 K queries/month                               |
+| `EXA_API_KEY`       | Exa.ai semantic search — free tier available (`kompyla[search]` required)    |
+| `SERPAPI_API_KEY`   | SerpAPI multi-engine search (`kompyla[search]` required)                      |
+| `GITHUB_TOKEN`      | GitHub API token (raises rate limits for the GitHub connector)                |
+| `KOMPYLA_KB`        | Default KB path (used by `kompyla serve` and the Docker image)                |
+
+> **Web search fallback** — if no search API key is set, Kompyla falls back to DuckDuckGo automatically (no key required, no extra package). Snippet results are enriched with full page text via trafilatura.
 
 ---
 
@@ -456,14 +502,14 @@ The test suite covers: deduplication, YouTube transcript parsing, KB health chec
 kompyla/
 ├── schema/         Domain schema generation and Pydantic models
 ├── storage/        KBLayout (filesystem), MetaIndex (SQLite)
-├── llm/            LLMProvider ABC, OllamaProvider, AnthropicProvider
-├── retriever/      SourceConnector ABC + Web, arXiv, GitHub, RSS, YouTube
+├── llm/            LLMProvider ABC + OllamaProvider, AnthropicProvider, OpenAIProvider, GeminiProvider
+├── retriever/      SourceConnector ABC + Web (multi-backend), arXiv, GitHub, RSS, YouTube
 ├── filter/         RelevanceScorer (LLM), Deduplicator (SHA-256 + MinHash)
 ├── compiler/       raw/ → wiki/ pipeline, incremental merge, linker
 ├── evolver/        lint, gap detection, confidence helpers
 ├── query/          Q&A with citation, synthesis page filing
 ├── presenter/      HTML, Markdown, DOCX, PPTX, Marp, PDF, charts
-├── ui/             Streamlit app (Browse / Search / Ask / Stats)
+├── ui/             Streamlit app (Setup / Browse / Search / Ask / Stats)
 ├── scheduler/      Periodic cycle runner and schedule state
 ├── crossref/       Multi-KB topic bridge
 ├── feedback/       Feedback store and confidence delta application
@@ -478,6 +524,7 @@ kompyla/
 - **Relevance before ingest** — the filter layer rejects noise at the edge; a small clean KB beats a large noisy one.
 - **Markdown + SQLite as substrate** — plain files give portability and git-diffable history; SQLite adds queryable metadata without a server.
 - **Confidence and provenance are first-class** — every wiki page carries a confidence score and a list of source documents.
+- **Search with graceful degradation** — API-backed search (Serper → Brave → Exa → SerpAPI) is preferred when a key is configured; DuckDuckGo is the always-available zero-config fallback.
 
 ---
 
@@ -513,6 +560,13 @@ Contributions are welcome. Please follow these steps:
 
 6. **Open a pull request** with a clear description of what changed and why.
 
+### Adding a new LLM provider
+
+1. Create `kompyla/llm/<name>_provider.py` implementing `LLMProvider` (single `chat(messages, system) -> str` method).
+2. Import it in `kompyla/llm/__init__.py` and add a branch to `get_provider()`.
+3. Add `<name>_api_key: str | None = None` to `LLMConfig` in `kompyla/config.py` and the `os.getenv(...)` override in `KompylaConfig.load()`.
+4. Expose the env var in `.env.example` and in `docker-compose.yml` (the `x-env` anchor covers all services automatically).
+
 ### Adding a new source connector
 
 ```python
@@ -543,18 +597,19 @@ Register it in `kompyla/retriever/__init__.py` and add it to `_build_connectors(
 ### Completed
 
 - [x] KB scaffolding — domain schema generation from a plain-English topic
-- [x] Agentic retrieval — web, arXiv, GitHub, RSS, and YouTube connectors
+- [x] Agentic retrieval — web (Serper / Brave / Exa / SerpAPI / DuckDuckGo fallback), arXiv, GitHub, RSS, and YouTube connectors
 - [x] Incremental compilation with LLM merge pass
 - [x] Health checks — broken links, stale pages, orphans, low-confidence
 - [x] Gap detection — deterministic + LLM-suggested topics
 - [x] Natural-language Q&A with citation and synthesis page filing
 - [x] Presentation exports — HTML, Markdown bundle, DOCX, PPTX, Marp slides, charts, PDF (optional)
-- [x] Streamlit web UI — Browse, Search, Ask, Stats
+- [x] Streamlit web UI — Setup (first-run), Browse, Search, Ask, Stats
 - [x] Scheduled research cycle (`kompyla schedule --daemon`)
 - [x] Multi-KB cross-referencing (`kompyla crossref`)
 - [x] User feedback integration (`kompyla feedback`)
 - [x] Synthetic Q&A training data generator (`kompyla synth`)
-- [x] Docker image and `docker-compose.yml` for one-command local setup
+- [x] Docker image + `docker-compose.yml` — all LLM providers, all search backends, first-run UI
+- [x] Four LLM providers: Ollama, Anthropic, OpenAI, Gemini (`google-genai` SDK)
 - [x] Comprehensive README with architecture overview, contributing guide, and license
 - [x] Architecture flowchart in README (Mermaid)
 - [x] Publish to PyPI (`pip install kompyla`)

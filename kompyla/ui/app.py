@@ -15,6 +15,7 @@ import yaml
 from kompyla.config import KompylaConfig
 from kompyla.llm import get_provider
 from kompyla.query.qa import answer_question
+from kompyla.schema.generator import generate_schema
 from kompyla.schema.models import DomainSchema
 from kompyla.storage.index import MetaIndex
 from kompyla.storage.layout import KBLayout
@@ -53,16 +54,82 @@ def _load_kb(kb_path_str: str):
     return layout, index, schema, cfg
 
 
+# ---------- first-run setup ----------
+
+def _setup_screen(kb_path: Path) -> None:
+    st.title("Kompyla — First-run setup")
+    st.info(
+        f"No knowledge base found at **`{kb_path}`**. "
+        "Fill in the form below to initialise one."
+    )
+
+    with st.form("init_form"):
+        domain = st.text_input(
+            "Research domain",
+            placeholder="e.g. electric vehicles, quantum computing …",
+        )
+        st.caption(
+            "The domain drives the KB schema (page types, entity categories, seed queries). "
+            "You can change it later by re-running `kompyla init`."
+        )
+        submitted = st.form_submit_button("Initialise KB", type="primary")
+
+    if not submitted:
+        return
+    if not domain.strip():
+        st.error("Please enter a domain name.")
+        return
+
+    cfg = KompylaConfig.load()
+    try:
+        llm = get_provider(cfg.llm)
+    except Exception as exc:
+        st.error(f"Could not load LLM provider: {exc}")
+        st.info(
+            "Set the appropriate API key environment variable and restart the container, "
+            "or configure an Ollama endpoint via `OLLAMA_BASE_URL`."
+        )
+        return
+
+    with st.spinner(f"Generating schema for **{domain.strip()}** using `{llm.model_name}` …"):
+        try:
+            layout = KBLayout(kb_path)
+            layout.create()
+            schema = generate_schema(domain.strip(), llm)
+            layout.schema_file.write_text(
+                yaml.dump(schema.model_dump(), allow_unicode=True, sort_keys=False),
+                encoding="utf-8",
+            )
+            layout.kb_config.write_text(
+                yaml.dump({"domain": domain.strip()}, allow_unicode=True),
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            st.error(f"Initialisation failed: {exc}")
+            return
+
+    st.success(
+        f"KB initialised at `{kb_path}` — "
+        f"{len(schema.page_types)} page types, "
+        f"{len(schema.seed_queries)} seed queries."
+    )
+    st.info("The page will reload automatically in a moment.")
+    st.cache_resource.clear()
+    st.rerun()
+
+
 # ---------- main ----------
 
 def main() -> None:
-    st.set_page_config(page_title="Kompyla", layout="wide", page_icon=None)
     kb_path = _kb_path_from_args()
-
     loaded = _load_kb(str(kb_path))
+
     if loaded is None:
-        st.error(f"No KB at {kb_path}. Run `kompyla init <domain>` first.")
+        st.set_page_config(page_title="Kompyla — Setup", layout="centered", page_icon=None)
+        _setup_screen(kb_path)
         return
+
+    st.set_page_config(page_title="Kompyla", layout="wide", page_icon=None)
     layout, index, schema, cfg = loaded
 
     st.sidebar.title("Kompyla")
@@ -179,5 +246,4 @@ def _stats(layout: KBLayout, index: MetaIndex) -> None:
             st.image(str(img), caption=img.stem.replace("_", " ").title())
 
 
-if __name__ == "__main__":
-    main()
+main()
