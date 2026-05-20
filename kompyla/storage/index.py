@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -58,11 +59,13 @@ def _migrate(conn: sqlite3.Connection) -> None:
 
 class MetaIndex:
     def __init__(self, db_path: Path):
-        self._conn = sqlite3.connect(db_path)
+        # check_same_thread=False lets Streamlit's worker threads share the cached connection
+        self._conn = sqlite3.connect(db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
         self._conn.executescript(_SCHEMA)
         self._conn.commit()
         _migrate(self._conn)
+        self._lock = threading.Lock()
 
     # --- raw docs ---
 
@@ -76,30 +79,32 @@ class MetaIndex:
         content_hash: str | None = None,
         title: str | None = None,
     ) -> None:
-        self._conn.execute(
-            "INSERT INTO raw_docs "
-            "(path, ingested_at, size_bytes, title, url, source_type, relevance_score, content_hash) "
-            "VALUES (?,?,?,?,?,?,?,?) "
-            "ON CONFLICT(path) DO UPDATE SET "
-            "ingested_at=excluded.ingested_at, size_bytes=excluded.size_bytes, "
-            "title=COALESCE(excluded.title, raw_docs.title), "
-            "url=COALESCE(excluded.url, raw_docs.url), "
-            "source_type=COALESCE(excluded.source_type, raw_docs.source_type), "
-            "relevance_score=COALESCE(excluded.relevance_score, raw_docs.relevance_score), "
-            "content_hash=COALESCE(excluded.content_hash, raw_docs.content_hash)",
-            (
-                str(path), _now(), path.stat().st_size,
-                title, url, source_type, relevance_score, content_hash,
-            ),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO raw_docs "
+                "(path, ingested_at, size_bytes, title, url, source_type, relevance_score, content_hash) "
+                "VALUES (?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(path) DO UPDATE SET "
+                "ingested_at=excluded.ingested_at, size_bytes=excluded.size_bytes, "
+                "title=COALESCE(excluded.title, raw_docs.title), "
+                "url=COALESCE(excluded.url, raw_docs.url), "
+                "source_type=COALESCE(excluded.source_type, raw_docs.source_type), "
+                "relevance_score=COALESCE(excluded.relevance_score, raw_docs.relevance_score), "
+                "content_hash=COALESCE(excluded.content_hash, raw_docs.content_hash)",
+                (
+                    str(path), _now(), path.stat().st_size,
+                    title, url, source_type, relevance_score, content_hash,
+                ),
+            )
+            self._conn.commit()
 
     def mark_compiled(self, raw_path: Path) -> None:
-        self._conn.execute(
-            "UPDATE raw_docs SET compiled_at=? WHERE path=?",
-            (_now(), str(raw_path)),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "UPDATE raw_docs SET compiled_at=? WHERE path=?",
+                (_now(), str(raw_path)),
+            )
+            self._conn.commit()
 
     def pending_raw_docs(self) -> list[sqlite3.Row]:
         return self._conn.execute(
@@ -133,21 +138,22 @@ class MetaIndex:
         tags: list[str],
     ) -> None:
         now = _now()
-        self._conn.execute(
-            "INSERT INTO pages "
-            "(title, wiki_path, page_type, sources, confidence, created_at, updated_at, tags) "
-            "VALUES (?,?,?,?,?,?,?,?) "
-            "ON CONFLICT(wiki_path) DO UPDATE SET "
-            "title=excluded.title, page_type=excluded.page_type, "
-            "sources=excluded.sources, confidence=excluded.confidence, "
-            "updated_at=excluded.updated_at, tags=excluded.tags",
-            (
-                title, str(wiki_path), page_type,
-                json.dumps(sources), confidence,
-                now, now, json.dumps(tags),
-            ),
-        )
-        self._conn.commit()
+        with self._lock:
+            self._conn.execute(
+                "INSERT INTO pages "
+                "(title, wiki_path, page_type, sources, confidence, created_at, updated_at, tags) "
+                "VALUES (?,?,?,?,?,?,?,?) "
+                "ON CONFLICT(wiki_path) DO UPDATE SET "
+                "title=excluded.title, page_type=excluded.page_type, "
+                "sources=excluded.sources, confidence=excluded.confidence, "
+                "updated_at=excluded.updated_at, tags=excluded.tags",
+                (
+                    title, str(wiki_path), page_type,
+                    json.dumps(sources), confidence,
+                    now, now, json.dumps(tags),
+                ),
+            )
+            self._conn.commit()
 
     def all_pages(self) -> list[sqlite3.Row]:
         return self._conn.execute(

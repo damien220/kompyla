@@ -5,7 +5,7 @@ version: "3.9"
 #
 # Profiles:
 #   (default)         kompyla-ui only  — connect to Ollama on the host or
-#                                         supply ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY
+#                                         supply ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY / GROQ_API_KEY
 #   --profile ollama  also starts a bundled Ollama container
 # ---------------------------------------------------------------------------
 
@@ -13,12 +13,13 @@ version: "3.9"
 x-env: &common-env
   KOMPYLA_KB: /kb
   # ── LLM providers ──────────────────────────────────────────────────────────
-  # Set KOMPYLA_LLM_PROVIDER to override auto-detection (ollama|anthropic|openai|gemini)
+  # Set KOMPYLA_LLM_PROVIDER to override auto-detection (ollama|anthropic|openai|gemini|groq)
   KOMPYLA_LLM_PROVIDER: "${KOMPYLA_LLM_PROVIDER:-}"
   KOMPYLA_LLM_MODEL: "${KOMPYLA_LLM_MODEL:-}"
   ANTHROPIC_API_KEY: "${ANTHROPIC_API_KEY:-}"
   OPENAI_API_KEY: "${OPENAI_API_KEY:-}"
   GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+  GROQ_API_KEY: "${GROQ_API_KEY:-}"
   OLLAMA_BASE_URL: "${OLLAMA_BASE_URL:-http://ollama:11434}"
   # ── Web search (first key present wins; DuckDuckGo fallback if none) ───────
   SERPER_API_KEY: "${SERPER_API_KEY:-}"

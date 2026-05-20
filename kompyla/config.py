@@ -4,16 +4,18 @@ import os
 from pathlib import Path
 
 import yaml
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 
 class LLMConfig(BaseModel):
-    provider: str = "ollama"            # "ollama", "anthropic", "openai", or "gemini"
+    provider: str = "ollama"            # "ollama", "anthropic", "openai", "gemini", or "groq"
     model: str = "llama3.2"
     ollama_base_url: str = "http://localhost:11434"
     anthropic_api_key: str | None = None
     openai_api_key: str | None = None
     gemini_api_key: str | None = None
+    groq_api_key: str | None = None
 
 
 class RetrievalConfig(BaseModel):
@@ -40,6 +42,9 @@ class KompylaConfig(BaseModel):
 
     @classmethod
     def load(cls, path: Path | None = None) -> "KompylaConfig":
+        # Load .env from cwd (or parent dirs) so local runs behave like Docker Compose
+        load_dotenv(override=False)
+
         config_path = path or Path.home() / ".kompyla" / "config.yaml"
         data: dict = {}
         if config_path.exists():
@@ -57,6 +62,8 @@ class KompylaConfig(BaseModel):
             llm_data["openai_api_key"] = api_key
         if api_key := os.getenv("GEMINI_API_KEY"):
             llm_data["gemini_api_key"] = api_key
+        if api_key := os.getenv("GROQ_API_KEY"):
+            llm_data["groq_api_key"] = api_key
         if base_url := os.getenv("OLLAMA_BASE_URL"):
             llm_data["ollama_base_url"] = base_url
 
@@ -68,6 +75,8 @@ class KompylaConfig(BaseModel):
                 llm_data["provider"] = "openai"
             elif llm_data.get("gemini_api_key"):
                 llm_data["provider"] = "gemini"
+            elif llm_data.get("groq_api_key"):
+                llm_data["provider"] = "groq"
 
         retr_data = data.setdefault("retrieval", {})
         if v := os.getenv("SERPER_API_KEY"):

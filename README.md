@@ -400,12 +400,13 @@ kompyla synth [--out training.jsonl]   Generate Q&A training data
 
 ```yaml
 llm:
-  provider: ollama          # "ollama", "anthropic", "openai", or "gemini"
-  model: llama3.2           # any Ollama model; or "claude-sonnet-4-6", "gpt-4o", "gemini-2.0-flash"
+  provider: ollama          # "ollama", "anthropic", "openai", "gemini", or "groq"
+  model: llama3.2           # any Ollama model; or "claude-sonnet-4-6", "gpt-4o", "gemini-2.0-flash", "llama-3.3-70b-versatile"
   ollama_base_url: http://localhost:11434
   # anthropic_api_key: ...  # or ANTHROPIC_API_KEY env var
   # openai_api_key: ...     # or OPENAI_API_KEY env var
   # gemini_api_key: ...     # or GEMINI_API_KEY env var
+  # groq_api_key: ...       # or GROQ_API_KEY env var  (free tier at console.groq.com)
 
 retrieval:
   enabled_sources: [web, arxiv, github, rss]   # add "youtube" if needed
@@ -609,7 +610,7 @@ Register it in `kompyla/retriever/__init__.py` and add it to `_build_connectors(
 - [x] User feedback integration (`kompyla feedback`)
 - [x] Synthetic Q&A training data generator (`kompyla synth`)
 - [x] Docker image + `docker-compose.yml` — all LLM providers, all search backends, first-run UI
-- [x] Four LLM providers: Ollama, Anthropic, OpenAI, Gemini (`google-genai` SDK)
+- [x] Five LLM providers: Ollama, Anthropic, OpenAI, Gemini (`google-genai` SDK), Groq (free tier — Llama 3.3 70B)
 - [x] Comprehensive README with architecture overview, contributing guide, and license
 - [x] Architecture flowchart in README (Mermaid)
 - [x] Publish to PyPI (`pip install kompyla`)
