@@ -8,6 +8,7 @@ from pathlib import Path
 import yaml
 
 from ..llm.base import LLMProvider, Message
+from ..utils.json_utils import parse_llm_json
 from ..schema.models import DomainSchema
 from ..storage.index import MetaIndex
 from ..storage.layout import KBLayout
@@ -48,15 +49,11 @@ Be factual. Extract only what is in the source — do not invent information.\
 """
 
 
-def _strip_fences(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```[a-z]*\n?", "", text).rstrip("`").strip()
-    return text
-
-
 def _parse_llm_json(response: str) -> dict:
-    return json.loads(_strip_fences(response))
+    result = parse_llm_json(response)
+    if not result:
+        raise ValueError(f"LLM compile response is not a JSON object: {response[:300]}")
+    return result
 
 
 def _wiki_page(
@@ -175,6 +172,7 @@ def compile_document(
             ),
         )],
         system=_SYSTEM,
+        json_mode=True,
     )
     data = _parse_llm_json(response)
 
@@ -191,6 +189,7 @@ def compile_document(
         merge_response = llm.chat(
             messages=[Message(role="user", content=merge_prompt)],
             system=_MERGE_SYSTEM,
+            json_mode=True,
         )
         try:
             data = _parse_llm_json(merge_response)

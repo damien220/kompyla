@@ -15,13 +15,23 @@ class GeminiProvider(LLMProvider):
     def model_name(self) -> str:
         return self._model
 
-    def chat(self, messages: list[Message], system: str = "") -> str:
+    def chat(
+        self,
+        messages: list[Message],
+        system: str = "",
+        json_mode: bool = False,
+    ) -> str:
         contents = []
         for m in messages:
             role = "model" if m.role == "assistant" else "user"
             contents.append(types.Content(role=role, parts=[types.Part(text=m.content)]))
 
-        cfg = types.GenerateContentConfig(system_instruction=system) if system else None
+        cfg_kwargs: dict = {}
+        if system:
+            cfg_kwargs["system_instruction"] = system
+        if json_mode:
+            cfg_kwargs["response_mime_type"] = "application/json"
+        cfg = types.GenerateContentConfig(**cfg_kwargs) if cfg_kwargs else None
         response = self._client.models.generate_content(
             model=self._model,
             contents=contents,

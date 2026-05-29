@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import json
-import re
 from typing import TYPE_CHECKING
 
 from ..llm.base import LLMProvider, Message
+from ..utils.json_utils import parse_llm_json
 from ..schema.models import DomainSchema
 
 if TYPE_CHECKING:
@@ -37,11 +36,8 @@ Respond with JSON only:
 """
 
 
-def _strip_fences(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```[a-z]*\n?", "", text).rstrip("`").strip()
-    return text
+def _parse_llm_json(response: str) -> dict:
+    return parse_llm_json(response)
 
 
 class RelevanceScorer:
@@ -61,8 +57,9 @@ class RelevanceScorer:
             response = self.llm.chat(
                 messages=[Message(role="user", content=prompt)],
                 system=_SYSTEM,
+                json_mode=True,
             )
-            data = json.loads(_strip_fences(response))
+            data = _parse_llm_json(response)
             score = float(data.get("score", 0.0))
         except (json.JSONDecodeError, ValueError, RuntimeError):
             return 0.0

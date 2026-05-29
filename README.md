@@ -137,7 +137,7 @@ flowchart TD
 | Capability                  | Description                                                                                                                      |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | **KB scaffolding**          | LLM generates a domain schema (page types, entity categories, seed queries) from a plain-English topic                           |
-| **Agentic retrieval**       | Searches the web (Serper / Brave / Exa / SerpAPI; DuckDuckGo fallback), arXiv, GitHub, RSS feeds, and YouTube transcripts       |
+| **Agentic retrieval**       | Searches the web (Serper / Brave / Exa / SerpAPI; DuckDuckGo fallback), arXiv, GitHub, RSS feeds, and YouTube transcripts        |
 | **Deduplication**           | SHA-256 exact matching + MinHash LSH for near-duplicate detection (Jaccard ≥ 0.85)                                               |
 | **Incremental compilation** | Raw `.md` files are compiled into structured wiki pages; when a page already exists, a second LLM pass merges new information in |
 | **Health checks**           | Finds broken internal links, stale pages (>180 days), low-confidence pages, and orphans                                          |
@@ -172,12 +172,12 @@ pip install "kompyla[pdf,search]"   # both
 
 Kompyla supports four providers. The `provider` key in `config.yaml` selects which one is used.
 
-| Provider      | Config value  | Required env var    | Notes                                                              |
-| ------------- | ------------- | ------------------- | ------------------------------------------------------------------ |
-| **Ollama**    | `ollama`      | —                   | Fully offline. Install from [ollama.com](https://ollama.com), then `ollama pull llama3.2` |
-| **Anthropic** | `anthropic`   | `ANTHROPIC_API_KEY` | Claude models (e.g. `claude-sonnet-4-6`)                           |
-| **OpenAI**    | `openai`      | `OPENAI_API_KEY`    | GPT-4o and other OpenAI models                                     |
-| **Gemini**    | `gemini`      | `GEMINI_API_KEY`    | Gemini 2.0 Flash and other Google models (uses `google-genai` SDK) |
+| Provider      | Config value | Required env var    | Notes                                                                                     |
+| ------------- | ------------ | ------------------- | ----------------------------------------------------------------------------------------- |
+| **Ollama**    | `ollama`     | —                   | Fully offline. Install from [ollama.com](https://ollama.com), then `ollama pull llama3.2` |
+| **Anthropic** | `anthropic`  | `ANTHROPIC_API_KEY` | Claude models (e.g. `claude-sonnet-4-6`)                                                  |
+| **OpenAI**    | `openai`     | `OPENAI_API_KEY`    | GPT-4o and other OpenAI models                                                            |
+| **Gemini**    | `gemini`     | `GEMINI_API_KEY`    | Gemini 2.0 Flash and other Google models (uses `google-genai` SDK)                        |
 
 ---
 
@@ -392,6 +392,13 @@ kompyla feedback --apply               Apply feedback deltas to confidence score
 kompyla synth [--out training.jsonl]   Generate Q&A training data
 ```
 
+Fastest things you can do today without code changes:
+
+1. Switch to Groq — it's ~5× faster than other providers
+2. Set use_relevance_filter: false in config — removes the per-doc LLM scoring pass
+3. Reduce max_per_source — fewer docs = fewer compile calls
+4. kompyla search --no-filter / kompyla gaps --no-llm for quick runs
+
 ---
 
 ## Configuration reference
@@ -400,8 +407,8 @@ kompyla synth [--out training.jsonl]   Generate Q&A training data
 
 ```yaml
 llm:
-  provider: ollama          # "ollama", "anthropic", "openai", "gemini", or "groq"
-  model: llama3.2           # any Ollama model; or "claude-sonnet-4-6", "gpt-4o", "gemini-2.0-flash", "llama-3.3-70b-versatile"
+  provider: ollama # "ollama", "anthropic", "openai", "gemini", or "groq"
+  model: llama3.2 # any Ollama model; or "claude-sonnet-4-6", "gpt-4o", "gemini-2.0-flash", "llama-3.3-70b-versatile"
   ollama_base_url: http://localhost:11434
   # anthropic_api_key: ...  # or ANTHROPIC_API_KEY env var
   # openai_api_key: ...     # or OPENAI_API_KEY env var
@@ -409,7 +416,7 @@ llm:
   # groq_api_key: ...       # or GROQ_API_KEY env var  (free tier at console.groq.com)
 
 retrieval:
-  enabled_sources: [web, arxiv, github, rss]   # add "youtube" if needed
+  enabled_sources: [web, arxiv, github, rss] # add "youtube" if needed
   max_per_source: 5
   min_relevance: 0.5
   use_relevance_filter: true
@@ -426,18 +433,18 @@ retrieval:
 
 ### Environment variables
 
-| Variable            | Purpose                                                                       |
-| ------------------- | ----------------------------------------------------------------------------- |
-| `ANTHROPIC_API_KEY` | Anthropic (Claude) API key                                                    |
-| `OPENAI_API_KEY`    | OpenAI API key                                                                |
-| `GEMINI_API_KEY`    | Google Gemini API key                                                         |
-| `OLLAMA_BASE_URL`   | Override Ollama server URL (default `http://localhost:11434`)                 |
-| `SERPER_API_KEY`    | Serper web search — Google results, $1/1K queries                             |
-| `BRAVE_API_KEY`     | Brave Search API — free tier: 2 K queries/month                               |
-| `EXA_API_KEY`       | Exa.ai semantic search — free tier available (`kompyla[search]` required)    |
-| `SERPAPI_API_KEY`   | SerpAPI multi-engine search (`kompyla[search]` required)                      |
-| `GITHUB_TOKEN`      | GitHub API token (raises rate limits for the GitHub connector)                |
-| `KOMPYLA_KB`        | Default KB path (used by `kompyla serve` and the Docker image)                |
+| Variable            | Purpose                                                                   |
+| ------------------- | ------------------------------------------------------------------------- |
+| `ANTHROPIC_API_KEY` | Anthropic (Claude) API key                                                |
+| `OPENAI_API_KEY`    | OpenAI API key                                                            |
+| `GEMINI_API_KEY`    | Google Gemini API key                                                     |
+| `OLLAMA_BASE_URL`   | Override Ollama server URL (default `http://localhost:11434`)             |
+| `SERPER_API_KEY`    | Serper web search — Google results, $1/1K queries                         |
+| `BRAVE_API_KEY`     | Brave Search API — free tier: 2 K queries/month                           |
+| `EXA_API_KEY`       | Exa.ai semantic search — free tier available (`kompyla[search]` required) |
+| `SERPAPI_API_KEY`   | SerpAPI multi-engine search (`kompyla[search]` required)                  |
+| `GITHUB_TOKEN`      | GitHub API token (raises rate limits for the GitHub connector)            |
+| `KOMPYLA_KB`        | Default KB path (used by `kompyla serve` and the Docker image)            |
 
 > **Web search fallback** — if no search API key is set, Kompyla falls back to DuckDuckGo automatically (no key required, no extra package). Snippet results are enriched with full page text via trafilatura.
 

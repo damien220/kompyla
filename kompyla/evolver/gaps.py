@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import json
 import re
 import sqlite3
 from pathlib import Path
 
 from ..llm.base import LLMProvider, Message
+from ..utils.json_utils import parse_llm_json
 from ..schema.models import DomainSchema
 from ..storage.index import MetaIndex
 from ..storage.layout import KBLayout
@@ -52,11 +52,8 @@ Respond with JSON:
 """
 
 
-def _strip_fences(text: str) -> str:
-    text = text.strip()
-    if text.startswith("```"):
-        text = re.sub(r"^```[a-z]*\n?", "", text).rstrip("`").strip()
-    return text
+def _parse_llm_json(response: str) -> dict:
+    return parse_llm_json(response)
 
 
 def suggest_topic_gaps(
@@ -77,8 +74,9 @@ def suggest_topic_gaps(
         response = llm.chat(
             messages=[Message(role="user", content=prompt)],
             system=_TOPIC_GAP_SYSTEM,
+            json_mode=True,
         )
-        data = json.loads(_strip_fences(response))
+        data = _parse_llm_json(response)
         return [str(t) for t in data.get("missing_topics", [])]
     except (json.JSONDecodeError, RuntimeError, ValueError):
         return []

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from kompyla.llm.base import Message
+from kompyla.utils.json_utils import parse_llm_json
 from kompyla.storage.index import MetaIndex
 from kompyla.storage.layout import KBLayout
 
@@ -91,19 +92,4 @@ def save_training_data(records: list[dict], out_path: Path) -> Path:
 
 
 def _parse_pairs(text: str) -> list[dict]:
-    # Strip markdown fences if present
-    text = re.sub(r"```[a-z]*\n?", "", text).strip()
-    try:
-        data = json.loads(text)
-        if isinstance(data, list):
-            return data
-    except json.JSONDecodeError:
-        pass
-    # Fallback: find the first [...] block
-    m = re.search(r"\[.*?\]", text, re.DOTALL)
-    if m:
-        try:
-            return json.loads(m.group())
-        except json.JSONDecodeError:
-            pass
-    return []
+    return parse_llm_json(text, expect_list=True)  # type: ignore[return-value]

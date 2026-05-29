@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import json
-
 from ..llm.base import LLMProvider, Message
+from ..utils.json_utils import parse_llm_json
 from .models import DomainSchema
 
 _SYSTEM = (
@@ -51,20 +50,44 @@ Requirements:
 Be specific and concrete for the given domain.\
 """
 
+_RETRY_PROMPT = (
+    "Your previous response could not be parsed as JSON. Error: {error}\n\n"
+    "Return ONLY the raw JSON object — no markdown fences, no comments, no trailing commas, "
+    "no explanation. Start your response with {{ and end with }}."
+)
+
 
 def _parse_json(text: str) -> dict:
-    text = text.strip()
-    # Strip markdown fences if the model adds them despite instructions
-    if text.startswith("```"):
-        parts = text.split("```")
-        text = parts[1].lstrip("json").strip() if len(parts) > 1 else text
-    return json.loads(text)
+    result = parse_llm_json(text)
+    if not result:
+        raise ValueError(
+            f"LLM response could not be parsed as a JSON object.\n"
+            f"First 400 chars:\n{text[:400]}"
+        )
+    return result
 
 
 def generate_schema(domain: str, llm: LLMProvider) -> DomainSchema:
-    response = llm.chat(
-        messages=[Message(role="user", content=_USER_TEMPLATE.format(domain=domain))],
-        system=_SYSTEM,
-    )
-    data = _parse_json(response)
-    return DomainSchema(**data)
+    messages: list[Message] = [
+        Message(role="user", content=_USER_TEMPLATE.format(domain=domain))
+    ]
+
+    last_exc: Exception = RuntimeError("LLM returned no response")
+    for attempt in range(3):
+        response = llm.chat(messages=messages, system=_SYSTEM, json_mode=True)
+        try:
+            data = _parse_json(response)
+            return DomainSchema(**data)
+        except (ValueError, TypeError) as exc:
+            last_exc = exc
+            if attempt < 2:
+                messages = [
+                    *messages,
+                    Message(role="assistant", content=response),
+                    Message(
+                        role="user",
+                        content=_RETRY_PROMPT.format(error=exc),
+                    ),
+                ]
+
+    raise last_exc

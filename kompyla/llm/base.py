@@ -10,7 +10,12 @@ class Message:
 
 class LLMProvider(ABC):
     @abstractmethod
-    def chat(self, messages: list[Message], system: str = "") -> str: ...
+    def chat(
+        self,
+        messages: list[Message],
+        system: str = "",
+        json_mode: bool = False,
+    ) -> str: ...
 
     @property
     @abstractmethod

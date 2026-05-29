@@ -558,6 +558,11 @@ def chart(
 def serve(
     kb_path: Optional[Path] = typer.Option(None, "--kb", "-k"),
     port: int = typer.Option(8501, "--port", "-p"),
+    host: str = typer.Option(
+        "127.0.0.1",
+        "--host",
+        help="Address to bind. Use 127.0.0.1 for local-only, 0.0.0.0 for WSL2/devcontainer/server.",
+    ),
 ) -> None:
     """Launch the Streamlit web UI for browsing, searching, and querying the KB."""
     import os
@@ -572,12 +577,15 @@ def serve(
     env = os.environ.copy()
     env["KOMPYLA_KB"] = str(layout.root)
 
+    display_host = "localhost" if host == "127.0.0.1" else host
     cmd = [
         sys.executable, "-m", "streamlit", "run", str(app_path),
         "--server.port", str(port),
+        "--server.address", host,
+        "--server.headless", "true",
         "--browser.gatherUsageStats", "false",
     ]
-    console.print(f"Starting Streamlit on [cyan]http://localhost:{port}[/cyan] for KB at {layout.root}")
+    console.print(f"Starting Streamlit on [cyan]http://{display_host}:{port}[/cyan] for KB at {layout.root}")
     subprocess.run(cmd, env=env)
 
 

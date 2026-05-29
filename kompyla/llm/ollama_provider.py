@@ -14,13 +14,22 @@ class OllamaProvider(LLMProvider):
     def model_name(self) -> str:
         return self._model
 
-    def chat(self, messages: list[Message], system: str = "") -> str:
+    def chat(
+        self,
+        messages: list[Message],
+        system: str = "",
+        json_mode: bool = False,
+    ) -> str:
         msgs: list[dict] = []
         if system:
             msgs.append({"role": "system", "content": system})
         msgs.extend({"role": m.role, "content": m.content} for m in messages)
         try:
-            response = self._client.chat(model=self._model, messages=msgs)
+            response = self._client.chat(
+                model=self._model,
+                messages=msgs,
+                format="json" if json_mode else None,
+            )
         except Exception as exc:
             raise RuntimeError(
                 f"Ollama request failed — is Ollama running at {self._client._client.base_url}?\n"

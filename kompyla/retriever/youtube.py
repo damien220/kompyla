@@ -23,7 +23,7 @@ def _extract_video_id(url: str) -> str:
     raise ValueError(f"Could not extract video ID from URL: {url}")
 
 
-def _transcript_to_markdown(video_id: str, url: str, segments: list[dict]) -> str:
+def _transcript_to_markdown(video_id: str, url: str, segments) -> str:
     """Group transcript segments into ~60-second paragraphs."""
     lines = [
         "---",
@@ -43,12 +43,15 @@ def _transcript_to_markdown(video_id: str, url: str, segments: list[dict]) -> st
     paragraph: list[str] = []
     paragraph_start = 0.0
     for seg in segments:
-        if seg["start"] - paragraph_start > 60 and paragraph:
+        # v1.x returns FetchedTranscriptSnippet dataclasses; v0.x returned dicts
+        start = seg.start if hasattr(seg, "start") else seg["start"]
+        text = seg.text if hasattr(seg, "text") else seg["text"]
+        if start - paragraph_start > 60 and paragraph:
             lines.append(" ".join(paragraph))
             lines.append("")
             paragraph = []
-            paragraph_start = seg["start"]
-        paragraph.append(seg["text"].strip())
+            paragraph_start = start
+        paragraph.append(text.strip())
 
     if paragraph:
         lines.append(" ".join(paragraph))
@@ -62,14 +65,16 @@ def _fetch_transcript(url: str, languages: list[str] | None = None) -> tuple[str
     video_id = _extract_video_id(url)
     langs = languages or ["en"]
 
-    transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+    transcript_list = YouTubeTranscriptApi().list(video_id)
     try:
         transcript = transcript_list.find_transcript(langs)
     except NoTranscriptFound:
         transcript = transcript_list.find_generated_transcript(langs)
 
-    segments = transcript.fetch()
-    return video_id, _transcript_to_markdown(video_id, url, segments), segments
+    fetched = transcript.fetch()
+    # v1.x: FetchedTranscript is iterable; to_raw_data() gives list-of-dicts for callers
+    segments = fetched.to_raw_data() if hasattr(fetched, "to_raw_data") else fetched
+    return video_id, _transcript_to_markdown(video_id, url, fetched), segments
 
 
 def fetch_youtube(url: str, raw_dir: Path, languages: list[str] | None = None) -> Path:
